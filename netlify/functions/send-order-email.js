@@ -31,6 +31,8 @@ const isTooLong = (value, maxLength) => typeof value === "string" && value.trim(
 
 const parseBoolean = (value) => String(value || "true").toLowerCase() === "true";
 
+const getDeliveryMapLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}`;
+
 const parseJsonBody = (body) => {
   try {
     return JSON.parse(body || "{}");
@@ -65,6 +67,8 @@ const validateOrder = (payload) => {
     isTooLong(payload.contact, 40) ||
     isTooLong(payload.address, 300) ||
     isTooLong(payload.time, 80) ||
+    isTooLong(payload.deliveryLat || "", 32) ||
+    isTooLong(payload.deliveryLng || "", 32) ||
     isTooLong(payload.notes || "", 1000) ||
     isTooLong(payload.website || "", 120)
   ) {
@@ -79,6 +83,9 @@ const validateOrder = (payload) => {
     fulfillment: normalizeText(payload.fulfillment, 20),
     date: normalizeText(payload.date, 20),
     time: normalizeText(payload.time, 80),
+    deliveryLat: normalizeText(payload.deliveryLat || "", 32),
+    deliveryLng: normalizeText(payload.deliveryLng || "", 32),
+    deliveryMapLink: "",
     notes: normalizeText(payload.notes || "", 1000),
     website: normalizeText(payload.website || "", 120),
   };
@@ -101,6 +108,30 @@ const validateOrder = (payload) => {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(order.date)) {
     return { error: "Please choose a valid preferred date." };
+  }
+
+  if (order.deliveryLat || order.deliveryLng) {
+    if (!order.deliveryLat || !order.deliveryLng) {
+      return { error: "Please choose a valid delivery location pin." };
+    }
+
+    const deliveryLat = Number(order.deliveryLat);
+    const deliveryLng = Number(order.deliveryLng);
+
+    if (
+      !Number.isFinite(deliveryLat) ||
+      !Number.isFinite(deliveryLng) ||
+      deliveryLat < -90 ||
+      deliveryLat > 90 ||
+      deliveryLng < -180 ||
+      deliveryLng > 180
+    ) {
+      return { error: "Please choose a valid delivery location pin." };
+    }
+
+    order.deliveryLat = deliveryLat.toFixed(6);
+    order.deliveryLng = deliveryLng.toFixed(6);
+    order.deliveryMapLink = getDeliveryMapLink(order.deliveryLat, order.deliveryLng);
   }
 
   return { order };
@@ -135,6 +166,10 @@ exports.handler = async (event) => {
     timeZone: "Asia/Manila",
   });
   const notes = order.notes || "None";
+  const deliveryPin = order.deliveryMapLink || "Not provided";
+  const deliveryPinHtml = order.deliveryMapLink
+    ? `<a href="${escapeHtml(order.deliveryMapLink)}" style="color: #1d7fcc; font-weight: 700;">Open delivery pin in Google Maps</a>`
+    : "Not provided";
 
   try {
     const transporter = createTransporter();
@@ -152,6 +187,7 @@ exports.handler = async (event) => {
         `Delivery or pickup: ${order.fulfillment}`,
         `Preferred date: ${order.date}`,
         `Preferred time: ${order.time}`,
+        `Delivery pin: ${deliveryPin}`,
         `Notes: ${notes}`,
         `Submitted: ${submittedAt}`,
       ].join("\n"),
@@ -168,6 +204,7 @@ exports.handler = async (event) => {
               <tr><td style="padding: 8px 0; font-weight: 700;">Delivery or pickup</td><td style="padding: 8px 0;">${escapeHtml(order.fulfillment)}</td></tr>
               <tr><td style="padding: 8px 0; font-weight: 700;">Preferred date</td><td style="padding: 8px 0;">${escapeHtml(order.date)}</td></tr>
               <tr><td style="padding: 8px 0; font-weight: 700;">Preferred time</td><td style="padding: 8px 0;">${escapeHtml(order.time)}</td></tr>
+              <tr><td style="padding: 8px 0; font-weight: 700;">Delivery pin</td><td style="padding: 8px 0;">${deliveryPinHtml}</td></tr>
               <tr><td style="padding: 8px 0; font-weight: 700;">Notes</td><td style="padding: 8px 0;">${escapeHtml(notes)}</td></tr>
               <tr><td style="padding: 8px 0; font-weight: 700;">Submitted</td><td style="padding: 8px 0;">${escapeHtml(submittedAt)}</td></tr>
             </tbody>
