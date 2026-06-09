@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="Send a water order request to Three Kings Water Refilling Station for delivery or pickup in Dauis, Tagbilaran City, and Panglao, Bohol."
+      content="Send a water order request to 3 King's Water Refilling Station for delivery or pickup in Dauis, Tagbilaran City, and Panglao, Bohol."
     >
-    <title>Order Water from Three Kings Water Refilling Station in Dauis, Bohol</title>
+    <title>Order Water from 3 King's Water Refilling Station in Dauis, Bohol</title>
     <meta name="robots" content="index,follow">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -20,12 +20,12 @@
 
     <header class="site-header" id="top">
       <div class="container header-inner">
-        <a class="brand" href="index.html" aria-label="Three Kings Water Refilling Station home">
+        <a class="brand" href="index.html" aria-label="3 King's Water Refilling Station home">
           <span class="brand-mark">
-            <img class="brand-logo" src="Images/logo.png" alt="Three Kings Water Refilling Station logo">
+            <img class="brand-logo" src="Images/logo.png" alt="3 King's Water Refilling Station logo">
           </span>
           <span class="brand-copy">
-            <strong>Three Kings</strong>
+            <strong>3 King's</strong>
             <span>Water Refilling Station</span>
           </span>
         </a>
@@ -106,6 +106,23 @@
                 Preferred Time
                 <input type="text" name="time" placeholder="Morning, 2:00 PM, or ASAP" required>
               </label>
+              <div class="location-pin-field field-span-2" hidden>
+                <div class="location-pin-head">
+                  <div>
+                    <span class="form-label">Delivery Location Pin <span>Optional</span></span>
+                    <p>Add a map pin from a phone or tablet if the delivery address is hard to find or if you are ordering for another location.</p>
+                  </div>
+                </div>
+                <input type="hidden" name="deliveryLat" id="delivery-lat">
+                <input type="hidden" name="deliveryLng" id="delivery-lng">
+                <div class="location-pin-actions" aria-label="Delivery location pin options">
+                  <button class="button button-secondary ripple-target" type="button" id="use-current-location">Use My Current Location</button>
+                  <button class="button button-ghost ripple-target" type="button" id="pin-on-map">Pin on Map</button>
+                  <button class="button button-ghost ripple-target" type="button" id="clear-location-pin">Clear Pin</button>
+                </div>
+                <div class="delivery-map" id="delivery-map" role="application" aria-label="Map for choosing delivery location"></div>
+                <p class="location-pin-status" id="location-pin-status" aria-live="polite">No delivery pin added yet.</p>
+              </div>
               <label class="field-span-2">
                 Notes / Special Instructions
                 <textarea name="notes" rows="4" placeholder="Gate details, office floor, landmarks, or refill reminders"></textarea>
@@ -129,10 +146,10 @@
         <div>
           <a class="brand footer-brand" href="index.html">
             <span class="brand-mark">
-              <img class="brand-logo" src="Images/logo.png" alt="Three Kings Water Refilling Station logo">
+              <img class="brand-logo" src="Images/logo.png" alt="3 King's Water Refilling Station logo">
             </span>
             <span class="brand-copy">
-              <strong>Three Kings</strong>
+              <strong>3 King's</strong>
               <span>Water Refilling Station</span>
             </span>
           </a>
@@ -156,7 +173,7 @@
       </div>
 
       <div class="container footer-bottom">
-        <p>&copy; 2026 Three Kings Water Refilling Station. All rights reserved.</p>
+        <p>&copy; 2026 3 King's  Water Refilling Station. All rights reserved.</p>
       </div>
     </footer>
 
