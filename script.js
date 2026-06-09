@@ -15,7 +15,6 @@ const contactMessageFeedback = document.querySelector("#contact-message-feedback
 const currentPage = body?.dataset.page || "home";
 const pageLoadedAt = Date.now();
 
-const COOKIE_CONSENT_KEY = "threeKingsCookieConsent";
 const ORDER_COOLDOWN_KEY = "threeKingsOrderCooldown";
 const CONTACT_COOLDOWN_KEY = "threeKingsContactCooldown";
 const SUBMIT_COOLDOWN_MS = 2 * 60 * 1000;
@@ -115,38 +114,6 @@ const postJson = async (url, payload) => {
   return result;
 };
 
-const showPrivacyNotice = () => {
-  if (storage.get(COOKIE_CONSENT_KEY)) {
-    return;
-  }
-
-  const notice = document.createElement("section");
-  notice.className = "privacy-notice glass-card";
-  notice.setAttribute("aria-label", "Cookie and local storage notice");
-  notice.innerHTML = `
-    <p>This site uses basic local storage/cookies to remember your preference and reduce repeated prompts. Your form details are not stored in the browser after submission.</p>
-    <div class="privacy-notice-actions">
-      <button class="button button-primary ripple-target" type="button" data-consent="accepted">Accept</button>
-      <button class="button button-secondary ripple-target" type="button" data-consent="declined">Decline</button>
-    </div>
-  `;
-
-  notice.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-consent]");
-    if (!(button instanceof HTMLElement)) {
-      return;
-    }
-
-    storage.set(COOKIE_CONSENT_KEY, button.dataset.consent || "declined");
-    notice.remove();
-  });
-
-  body.append(notice);
-  notice.querySelectorAll(".ripple-target").forEach((button) => {
-    button.addEventListener("pointerdown", createRipple);
-  });
-};
-
 const createRipple = (event) => {
   const button = event.currentTarget;
   const rect = button.getBoundingClientRect();
@@ -167,7 +134,6 @@ const createRipple = (event) => {
 
 setActiveNavLink();
 updateHeaderState();
-showPrivacyNotice();
 window.addEventListener("scroll", updateHeaderState, { passive: true });
 
 navToggle?.addEventListener("click", () => {
