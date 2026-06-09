@@ -12,6 +12,14 @@ const orderForm = document.querySelector("#order-form");
 const formFeedback = document.querySelector("#form-feedback");
 const contactMessageForm = document.querySelector("#contact-message-form");
 const contactMessageFeedback = document.querySelector("#contact-message-feedback");
+const locationPinField = document.querySelector(".location-pin-field");
+const deliveryMapElement = document.querySelector("#delivery-map");
+const deliveryLatInput = document.querySelector("#delivery-lat");
+const deliveryLngInput = document.querySelector("#delivery-lng");
+const deliveryPinStatus = document.querySelector("#location-pin-status");
+const useCurrentLocationButton = document.querySelector("#use-current-location");
+const pinOnMapButton = document.querySelector("#pin-on-map");
+const clearLocationPinButton = document.querySelector("#clear-location-pin");
 const currentPage = body?.dataset.page || "home";
 const pageLoadedAt = Date.now();
 
@@ -19,8 +27,13 @@ const ORDER_COOLDOWN_KEY = "threeKingsOrderCooldown";
 const CONTACT_COOLDOWN_KEY = "threeKingsContactCooldown";
 const SUBMIT_COOLDOWN_MS = 2 * 60 * 1000;
 const MINIMUM_FORM_TIME_MS = 3000;
+const DEFAULT_DELIVERY_CENTER = [9.626149, 123.857627];
+const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
 
 let isMenuOpen = false;
+let deliveryMap = null;
+let deliveryMarker = null;
 
 const storage = {
   get(key) {
@@ -114,6 +127,182 @@ const postJson = async (url, payload) => {
   return result;
 };
 
+const isLikelyMobileOrTablet = () => {
+  const userAgentData = navigator.userAgentData;
+  if (userAgentData?.mobile) {
+    return true;
+  }
+
+  const userAgent = navigator.userAgent || "";
+  const hasMobileUserAgent = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini|Mobile|Tablet/i.test(userAgent);
+  const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const hasTouchInput = navigator.maxTouchPoints > 1;
+  const isTabletSizedOrSmaller = window.matchMedia("(max-width: 1180px)").matches;
+
+  return hasMobileUserAgent || (hasCoarsePointer && hasTouchInput && isTabletSizedOrSmaller);
+};
+
+const loadStylesheet = (href) =>
+  new Promise((resolve, reject) => {
+    if (document.querySelector(`link[href="${href}"]`)) {
+      resolve();
+      return;
+    }
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.addEventListener("load", resolve, { once: true });
+    link.addEventListener("error", reject, { once: true });
+    document.head.append(link);
+  });
+
+const loadScript = (src) =>
+  new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", reject, { once: true });
+    document.body.append(script);
+  });
+
+const loadLeafletAssets = async () => {
+  if (window.L) {
+    return;
+  }
+
+  await loadStylesheet(LEAFLET_CSS_URL);
+  await loadScript(LEAFLET_JS_URL);
+};
+
+const getDeliveryMapLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}`;
+
+const setDeliveryPinStatus = (message, state = "") => {
+  if (!deliveryPinStatus) {
+    return;
+  }
+
+  deliveryPinStatus.innerHTML = message;
+  deliveryPinStatus.classList.toggle("is-success", state === "success");
+  deliveryPinStatus.classList.toggle("is-error", state === "error");
+};
+
+const updateDeliveryPin = (lat, lng, shouldZoom = true) => {
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    setDeliveryPinStatus("Unable to read that location. Please try again.", "error");
+    return;
+  }
+
+  const fixedLat = latitude.toFixed(6);
+  const fixedLng = longitude.toFixed(6);
+  const mapLink = getDeliveryMapLink(fixedLat, fixedLng);
+
+  if (deliveryLatInput) {
+    deliveryLatInput.value = fixedLat;
+  }
+
+  if (deliveryLngInput) {
+    deliveryLngInput.value = fixedLng;
+  }
+
+  if (deliveryMap && window.L) {
+    const nextLocation = [latitude, longitude];
+
+    if (deliveryMarker) {
+      deliveryMarker.setLatLng(nextLocation);
+    } else {
+      deliveryMarker = window.L.marker(nextLocation).addTo(deliveryMap);
+    }
+
+    if (shouldZoom) {
+      deliveryMap.setView(nextLocation, Math.max(deliveryMap.getZoom(), 16));
+    }
+  }
+
+  setDeliveryPinStatus(
+    `Delivery pin added. <a href="${mapLink}" target="_blank" rel="noreferrer">Open in Google Maps</a>`,
+    "success"
+  );
+};
+
+const clearDeliveryPin = () => {
+  if (deliveryLatInput) {
+    deliveryLatInput.value = "";
+  }
+
+  if (deliveryLngInput) {
+    deliveryLngInput.value = "";
+  }
+
+  if (deliveryMarker && deliveryMap) {
+    deliveryMarker.removeFrom(deliveryMap);
+  }
+
+  deliveryMarker = null;
+  setDeliveryPinStatus("No delivery pin added yet.");
+};
+
+const initDeliveryMap = () => {
+  if (!deliveryMapElement || deliveryMap) {
+    return;
+  }
+
+  if (!window.L) {
+    setDeliveryPinStatus("Map could not load. You can still submit the order using the written address.", "error");
+    return;
+  }
+
+  deliveryMap = window.L.map(deliveryMapElement, {
+    center: DEFAULT_DELIVERY_CENTER,
+    zoom: 14,
+    scrollWheelZoom: false,
+  });
+
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(deliveryMap);
+
+  deliveryMap.on("click", (event) => {
+    updateDeliveryPin(event.latlng.lat, event.latlng.lng);
+  });
+
+  window.requestAnimationFrame(() => {
+    deliveryMap.invalidateSize();
+  });
+};
+
+const initDeliveryLocationFeature = async () => {
+  if (!locationPinField) {
+    return;
+  }
+
+  if (!isLikelyMobileOrTablet()) {
+    clearDeliveryPin();
+    locationPinField.hidden = true;
+    return;
+  }
+
+  locationPinField.hidden = false;
+  setDeliveryPinStatus("No delivery pin added yet.");
+
+  try {
+    await loadLeafletAssets();
+    initDeliveryMap();
+  } catch (error) {
+    setDeliveryPinStatus("Map could not load. You can still submit the order using the written address.", "error");
+  }
+};
+
 const createRipple = (event) => {
   const button = event.currentTarget;
   const rect = button.getBoundingClientRect();
@@ -134,6 +323,7 @@ const createRipple = (event) => {
 
 setActiveNavLink();
 updateHeaderState();
+initDeliveryLocationFeature();
 window.addEventListener("scroll", updateHeaderState, { passive: true });
 
 navToggle?.addEventListener("click", () => {
@@ -283,6 +473,54 @@ document.querySelectorAll(".ripple-target").forEach((button) => {
   button.addEventListener("pointerdown", createRipple);
 });
 
+useCurrentLocationButton?.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    setDeliveryPinStatus("Location access is not available on this device. Please pin the delivery location on the map.", "error");
+    return;
+  }
+
+  const originalText = useCurrentLocationButton.textContent;
+  useCurrentLocationButton.disabled = true;
+  useCurrentLocationButton.textContent = "Finding Location...";
+  setDeliveryPinStatus("Asking your browser for location permission...");
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      updateDeliveryPin(position.coords.latitude, position.coords.longitude);
+      useCurrentLocationButton.disabled = false;
+      useCurrentLocationButton.textContent = originalText;
+    },
+    () => {
+      setDeliveryPinStatus("Unable to get your current location. You can still click the map to place a delivery pin.", "error");
+      useCurrentLocationButton.disabled = false;
+      useCurrentLocationButton.textContent = originalText;
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000,
+    }
+  );
+});
+
+pinOnMapButton?.addEventListener("click", () => {
+  if (!deliveryMap) {
+    setDeliveryPinStatus("Map is still unavailable. Please use the written address field for now.", "error");
+    return;
+  }
+
+  deliveryMapElement?.scrollIntoView({
+    behavior: prefersReducedMotion.matches ? "auto" : "smooth",
+    block: "center",
+  });
+  window.setTimeout(() => deliveryMap.invalidateSize(), prefersReducedMotion.matches ? 0 : 260);
+  setDeliveryPinStatus("Click the map to place or move the delivery pin.");
+});
+
+clearLocationPinButton?.addEventListener("click", () => {
+  clearDeliveryPin();
+});
+
 if (orderForm && formFeedback) {
   orderForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -312,8 +550,12 @@ if (orderForm && formFeedback) {
       `Date: ${String(formData.get("date") || "").trim()}`,
       `Time: ${String(formData.get("time") || "").trim()}`,
     ].join("\n");
+    const deliveryLat = String(formData.get("deliveryLat") || "").trim();
+    const deliveryLng = String(formData.get("deliveryLng") || "").trim();
+    const deliveryPinSummary =
+      deliveryLat && deliveryLng ? `\nDelivery pin: ${getDeliveryMapLink(deliveryLat, deliveryLng)}` : "";
 
-    const confirmed = window.confirm(`Submit this order now?\n\n${orderSummary}`);
+    const confirmed = window.confirm(`Submit this order now?\n\n${orderSummary}${deliveryPinSummary}`);
     if (!confirmed) {
       setFeedback(formFeedback, "Order submission cancelled.");
       return;
@@ -336,6 +578,8 @@ if (orderForm && formFeedback) {
       fulfillment: String(formData.get("fulfillment") || "").trim(),
       date: String(formData.get("date") || "").trim(),
       time: String(formData.get("time") || "").trim(),
+      deliveryLat,
+      deliveryLng,
       notes: String(formData.get("notes") || "").trim(),
       website: String(formData.get("website") || "").trim(),
     };
@@ -343,6 +587,7 @@ if (orderForm && formFeedback) {
     try {
       const result = await postJson("/.netlify/functions/send-order-email", payload);
       orderForm.reset();
+      clearDeliveryPin();
       storage.set(ORDER_COOLDOWN_KEY, String(Date.now()));
       setFeedback(
         formFeedback,
